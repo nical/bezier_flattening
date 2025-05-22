@@ -81,3 +81,5 @@ Since the font data-set contains only small and fairly smooth curves, there are 
 | 0.25      | 39009 | 15293 | 3505  | 338   | 39   | 44   | 49  | 72  | 87  | 88  | 90  | 94  | 100 | 125 | 141 | 147 | 161 | 161 | 186 | 191 | 212 | 238 | 261 | 275 | 253 | 328 | 413 | 405 | 333 | 336 | 317 | 5341  |
 | 0.5       | 39866 | 10476 | 1580  | 95    | 74   | 108  | 124 | 130 | 133 | 176 | 197 | 223 | 236 | 272 | 304 | 346 | 382 | 406 | 533 | 549 | 474 | 459 | 669 | 665 | 578 | 666 | 683 | 453 | 411 | 350 | 260 | 556   |
 | 1.0       | 38970 | 6791  | 529   | 121   | 175  | 184  | 225 | 288 | 322 | 377 | 450 | 536 | 581 | 818 | 669 | 820 | 898 | 875 | 961 | 638 | 547 | 381 | 212 | 99  | 57  | 22  | 5   | 0   | 0   | 0   | 0   | 134   |
+
+Similar to the observation made in [levien_quads_per_cubics.md](levien_quads_per_cubics.md), 256-bit wide simd would probably not provide a big advanatge over 128-bit wide instructions since we'd fall short of filling the extra lanes most of the time.

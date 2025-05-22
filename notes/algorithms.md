@@ -11,7 +11,6 @@
 
 `Levien-quads` is Raph Levien's flattening algorithm without the fractional subdivision scheme. Cubic bézier curves are approximated with quadratics which are flattened independently.
 
-attempts into their own file)
 `Wang` is a fixed step flattening algorithm using Wang's formula to compute the number of subdivisions required to satisfy the tolerance parameter.
 
 `Yzerman` is the flattening algorithm described by Fabian Yzerman in [Fast approaches to simplify and offset Bézier curves within specified error limits](https://blend2d.com/research/simplify_and_offset_bezier_curves.pdf).
@@ -20,7 +19,7 @@ attempts into their own file)
 
 `Hfd` is an implementation of the hybrid forward differencing algorithm which is used in WPF's rasterizer (a predecessor of Direct2D).
 
-`Hain` is an implementation of [Hain's paper: Precise flattening of cubic bézier curve segments](http://sibgrapi.sid.inpe.br/col/sid.inpe.br/banon/2004/08.13.18.12/doc/BezierOffsetRendering.pdf).
+[`Hain`](hain.md) is an implementation of [Hain's paper: Precise flattening of cubic bézier curve segments](http://sibgrapi.sid.inpe.br/col/sid.inpe.br/banon/2004/08.13.18.12/doc/BezierOffsetRendering.pdf).
 
 `Fixed-16` Simply split all curves into 16 segments at regular intervals (it does not satisfy a tolerance parameter).
 

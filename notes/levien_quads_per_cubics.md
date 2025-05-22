@@ -1,7 +1,7 @@
 
 # Number of quadratic sub-curves per cubic curve
 
-The tables below show distribution of the number of quadratic sub-curves per cubic bézier curve for each dataset at various tolerance thresholds.
+The tables below show distribution of the number of quadratic sub-curves per cubic bézier curve for each dataset at various tolerance thresholds when using Raph Levien's flattening algorithm.
 
 For example the coumn `2` contains the number of cubic bézier curves that were approximated with two quadratic sub-curves.
 
@@ -83,3 +83,5 @@ get to fill a SIMD register (even with a witdh of 128 bits).
 | 0.25      | 0   | 34483 | 8294 | 3081 | 1072 | 365  | 233  | 70   | 10  | 25   | 0   | 0   | 1   | 0   | 0   | 0   |
 | 0.5       | 0   | 37357 | 7025 | 2429 | 495  | 242  | 54   | 31   | 0   | 1    | 0   | 0   | 0   | 0   | 0   | 0   |
 | 1.0       | 0   | 40453 | 5836 | 932  | 329  | 58   | 25   | 0    | 1   | 0    | 0   | 0   | 0   | 0   | 0   | 0   |
+
+The main takeaway is that using wider simd instructions would not necessarily improve performance of the first stage of the algorithm for a lot of the datasets used in this repository.
