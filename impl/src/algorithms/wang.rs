@@ -9,8 +9,10 @@ pub fn num_segments_cubic(curve: &CubicBezierSegment, tolerance: f32) -> f32 {
     let ctrl1 = curve.ctrl1.to_vector();
     let ctrl2 = curve.ctrl2.to_vector();
     let to = curve.to.to_vector();
-    let l = (from - ctrl1 * 2.0 + to).max(ctrl1 - ctrl2 * 2.0 + to) * 6.0;
-    let num_steps = f32::sqrt(l.length() * fast_recip(8.0 * tolerance));
+    let v1 = (from - ctrl1 * 2.0 + ctrl2) * 6.0;
+    let v2 = (ctrl1 - ctrl2 * 2.0 + to) * 6.0;
+    let l = v1.dot(v1).max(v2.dot(v2));
+    let num_steps = f32::sqrt(f32::sqrt(l) * fast_recip(8.0 * tolerance));
 
     fast_ceil(num_steps).max(1.0)
 }
