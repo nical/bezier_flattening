@@ -6,10 +6,6 @@ where
     Flat: CubicFlatness,
     F:  FnMut(&LineSegment)
 {
-    if crate::cubic_is_a_point(&curve, tolerance) {
-        return;
-    }
-
     let mut rem = *curve;
     let mut from = rem.from;
 

@@ -293,6 +293,8 @@ pub fn num_quadratics_impl(curve: &CubicBezierSegment, tolerance: f32) -> f32 {
 
     let err = x * x + y * y;
 
+    // TODO: cherry-pick optimizations from:
+    // https://github.com/linebender/vello/pull/1209
     (err / (432.0 * tolerance * tolerance))
         .powf(1.0 / 6.0)
         .ceil()
