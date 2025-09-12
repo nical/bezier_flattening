@@ -8,9 +8,6 @@ where
     Flatness: CubicFlatness,
     F:  FnMut(&LineSegment)
 {
-    if crate::cubic_is_a_point(&curve, tolerance) {
-        return;
-    }
     let mut prev = curve.from;
     flatten_recursive_cubic_impl::<Flatness, _>(curve, tolerance, callback, &mut prev, 0.0, 1.0);
 }
