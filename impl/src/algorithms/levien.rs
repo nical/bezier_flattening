@@ -159,7 +159,7 @@ pub fn flatten_cubic_scalar(curve: &CubicBezierSegment, tolerance: f32, cb: &mut
 
     let mut quads: ArrayVec<(FlatteningParams, QuadraticBezierPolynomial), 16> = ArrayVec::new();
 
-    let quad_step = 1.0 / num_quadratics;
+    let quad_step = 1.0 / num_quadratics as f32;
     let num_quadratics = num_quadratics as u32;
     let mut quad_idx = 0;
     let mut t0 = 0.0;
@@ -228,7 +228,7 @@ pub fn flatten_cubic_scalar2(curve: &CubicBezierSegment, tolerance: f32, cb: &mu
 
     let mut quads: ArrayVec<(FlatteningParams, QuadraticBezierPolynomial), 16> = ArrayVec::new();
 
-    let quad_step = 1.0 / num_quadratics;
+    let quad_step = 1.0 / num_quadratics as f32;
     let num_quadratics = num_quadratics as u32;
     let mut quad_idx = 0;
     let mut t0 = 0.0;
@@ -285,20 +285,38 @@ pub fn flatten_cubic_scalar2(curve: &CubicBezierSegment, tolerance: f32, cb: &mu
     }
 }
 
-pub fn num_quadratics_impl(curve: &CubicBezierSegment, tolerance: f32) -> f32 {
+pub fn num_quadratics_impl(curve: &CubicBezierSegment, tolerance: f32) -> usize {
+    const MAX_QUADS: usize = 16;
+
     debug_assert!(tolerance > 0.0);
 
     let x = curve.from.x - 3.0 * curve.ctrl1.x + 3.0 * curve.ctrl2.x - curve.to.x;
     let y = curve.from.y - 3.0 * curve.ctrl1.y + 3.0 * curve.ctrl2.y - curve.to.y;
 
-    let err = x * x + y * y;
+    let err = x * x + y * y / (432.0 * tolerance * tolerance);
 
-    // TODO: cherry-pick optimizations from:
-    // https://github.com/linebender/vello/pull/1209
-    (err / (432.0 * tolerance * tolerance))
-        .powf(1.0 / 6.0)
-        .ceil()
-        .max(1.0)
+    // The original version of this method was:
+    // let n_quads = (err.powf(1. / 6.0).ceil() as usize).max(1);
+    // n_quads.min(MAX_QUADS)
+    //
+    // Note how we always round up and clamp to the range [1, max_quads]. Since we don't
+    // care about the actual fractional value resulting from the powf call we can simply
+    // compute this using a precomputed lookup table evaluating 1^6, 2^6, 3^6, etc. and simply
+    // comparing if the value is less than or equal to each threshold.
+
+    const LUT: [f32; MAX_QUADS] = [
+        1.0, 64.0, 729.0, 4096.0, 15625.0, 46656.0, 117649.0, 262144.0, 531441.0, 1000000.0,
+        1771561.0, 2985984.0, 4826809.0, 7529536.0, 11390625.0, 16777216.0,
+    ];
+
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..MAX_QUADS {
+        if err <= LUT[i] {
+            return i + 1;
+        }
+    }
+
+    MAX_QUADS
 }
 
 #[test]

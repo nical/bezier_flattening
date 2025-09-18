@@ -339,7 +339,7 @@ pub unsafe fn flatten_cubic_simd4(curve: &CubicBezierSegment, tolerance: f32, cb
 
     let mut quads: ArrayVec<(FlatteningParams, QuadraticBezierPolynomial), 16> = ArrayVec::new();
 
-    let quad_step = fast_recip(num_quadratics);
+    let quad_step = fast_recip(num_quadratics as f32);
     let num_quadratics = num_quadratics as u32;
     let mut quad_idx = 0;
     let mut from = curve.from;
@@ -480,7 +480,7 @@ fn flatten_params() {
     let tolerance: f32 = 0.25;
     let sqrt_tolerance = tolerance.sqrt();
 
-    let num_quadratics = crate::levien::num_quadratics_impl(&curve, tolerance);
+    let num_quadratics = crate::levien::num_quadratics_impl(&curve, tolerance) as f32;
     println!("{num_quadratics:?} quads");
 
     let mut quads_sse: ArrayVec<(FlatteningParams, QuadraticBezierPolynomial), 16> = ArrayVec::new();

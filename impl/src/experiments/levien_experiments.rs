@@ -290,7 +290,7 @@ pub unsafe fn flatten_cubic_simd4_merged_quads(curve: &CubicBezierSegment<f32>, 
     let mut tmp_div_inv_integral_diff = AlignedBuf::new();
     let mut tmp_scaled_count_sum = AlignedBuf::new();
 
-    let quad_step = fast_recip(num_quadratics);
+    let quad_step = fast_recip(num_quadratics as f32);
     let num_quadratics = num_quadratics as u32;
     let mut quad_idx = 0;
     let mut from = curve.from;
@@ -437,7 +437,7 @@ pub unsafe fn flatten_cubic_simd4_with_point_buffer(curve: &CubicBezierSegment<f
     let mut quads: ArrayVec<(FlatteningParams, QuadraticBezierPolynomial), 16> = ArrayVec::new();
     let mut point_buffer: Aligned<[f32; 64]> = Aligned([0.0; 64]);
 
-    let quad_step = fast_recip(num_quadratics);
+    let quad_step = fast_recip(num_quadratics as f32);
     let num_quadratics = num_quadratics as u32;
     let mut quad_idx = 0;
     let mut from = curve.from;
@@ -566,7 +566,7 @@ pub unsafe fn flatten_cubic_simd4_v2(curve: &CubicBezierSegment<f32>, tolerance:
         div_inv_integral_diff: AlignedBuf::new(),
     };
 
-    let quad_step = fast_recip(num_quadratics);
+    let quad_step = fast_recip(num_quadratics as f32);
     let num_quadratics = num_quadratics as u32;
     let mut quad_idx = 0;
     let mut from = curve.from;
@@ -833,7 +833,7 @@ pub unsafe fn flatten_cubic_simd4_interleaved(curve: &CubicBezierSegment<f32>, t
 
     let mut quads: ArrayVec<(FlatteningParams, QuadraticBezierPolynomial), 16> = ArrayVec::new();
 
-    let quad_step = fast_recip(num_quadratics);
+    let quad_step = fast_recip(num_quadratics as f32);
     let num_quadratics = num_quadratics as u32;
     let mut quad_idx = 0;
     let mut from = curve.from;

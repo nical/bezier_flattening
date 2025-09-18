@@ -2,6 +2,16 @@ use crate::{CubicBezierSegment, LineSegment, QuadraticBezierSegment, point};
 
 use crate::{fast_ceil, fast_recip};
 
+// Avoid two square roots using a lookup table that contains
+// i^4 for  i in 1..25.
+const N: usize = 24;
+const LUT: [f32; N] = [
+    1.0, 16.0, 81.0, 256.0, 625.0, 1296.0, 2401.0, 4096.0, 6561.0,
+    10000.0, 14641.0, 20736.0, 28561.0, 38416.0, 50625.0, 65536.0,
+    83521.0, 104976.0, 130321.0, 160000.0, 194481.0, 234256.0,
+    279841.0, 331776.0
+];
+
 /// Computes the number of line segments required to build a flattened approximation
 /// of the curve with segments placed at regular `t` intervals.
 pub fn num_segments_cubic(curve: &CubicBezierSegment, tolerance: f32) -> f32 {
@@ -12,9 +22,21 @@ pub fn num_segments_cubic(curve: &CubicBezierSegment, tolerance: f32) -> f32 {
     let v1 = (from - ctrl1 * 2.0 + ctrl2) * 6.0;
     let v2 = (ctrl1 - ctrl2 * 2.0 + to) * 6.0;
     let l = v1.dot(v1).max(v2.dot(v2));
-    let num_steps = f32::sqrt(f32::sqrt(l) * fast_recip(8.0 * tolerance));
+    let d = fast_recip(8.0 * tolerance);
+    let err4 = l * d * d;
 
-    fast_ceil(num_steps).max(1.0)
+    // If the value we are looking for is within the LUT, take the fast path
+    if err4 <= 331776.0 {
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..N {
+            if err4 <= LUT[i] {
+                return (i + 1) as f32;
+            }
+        }
+    }
+
+    // Otherwise fall back to computing via two square roots.
+    fast_ceil(err4.sqrt().sqrt()).max(1.0)
 }
 
 /// Computes the number of line segments required to build a flattened approximation
@@ -24,9 +46,22 @@ pub fn num_segments_quadratic(curve: &QuadraticBezierSegment, tolerance: f32) ->
     let ctrl = curve.ctrl.to_vector();
     let to = curve.to.to_vector();
     let l = (from - ctrl * 2.0 + to) * 2.0;
-    let num_steps = f32::sqrt(l.length() * fast_recip(8.0 * tolerance));
+    let l2 = l.dot(l);
+    let d = fast_recip(8.0 * tolerance);
+    let err4 = l2 * d * d;
 
-    fast_ceil(num_steps).max(1.0)
+    // If the value we are looking for is within the LUT, take the fast path
+    if err4 <= 331776.0 {
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..N {
+            if err4 <= LUT[i] {
+                return (i + 1) as f32;
+            }
+        }
+    }
+
+    // Otherwise fall back to computing via two square roots.
+    fast_ceil(err4.sqrt().sqrt()).max(1.0)
 }
 
 
