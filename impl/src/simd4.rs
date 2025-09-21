@@ -1,38 +1,37 @@
-
-
 #[cfg(target_arch = "x86_64")]
 pub mod x86_64 {
-    use std::arch::x86_64 as arch;
     use arch::*;
+    use std::arch::x86_64 as arch;
 
     #[allow(non_camel_case_types)]
     pub type f32x4 = __m128;
 
     pub type CondMask = __m128;
 
-    pub use arch::_mm_set1_ps as splat;
-    pub use arch::_mm_setr_ps as vec4;
     pub use arch::_mm_add_ps as add;
-    pub use arch::_mm_sub_ps as sub;
-    pub use arch::_mm_mul_ps as mul;
-    pub use arch::_mm_div_ps as div;
-    pub use arch::_mm_sqrt_ps as sqrt;
-    pub use arch::_mm_ceil_ps as ceil;
-    pub use arch::_mm_rcp_ps as recip;
-    pub use arch::_mm_min_ps as min;
-    pub use arch::_mm_max_ps as max;
-    pub use arch::_mm_cmpeq_ps as eq;
-    pub use arch::_mm_cmpneq_ps as neq;
-    pub use arch::_mm_cmplt_ps as lt;
-    pub use arch::_mm_cmpgt_ps as gt;
     pub use arch::_mm_and_ps as and;
     pub use arch::_mm_andnot_ps as and_not;
-    pub use arch::_mm_or_ps as or;
+    pub use arch::_mm_ceil_ps as ceil;
+    pub use arch::_mm_ceil_ps as ceil_positive;
+    pub use arch::_mm_cmpeq_ps as eq;
+    pub use arch::_mm_cmpgt_ps as gt;
+    pub use arch::_mm_cmplt_ps as lt;
+    pub use arch::_mm_cmpneq_ps as neq;
     pub use arch::_mm_cvt_ss2si as get_first_as_int;
-    pub use arch::_mm_store_ps as aligned_store;
-    pub use arch::_mm_storeu_ps as unaligned_store;
+    pub use arch::_mm_div_ps as div;
     pub use arch::_mm_load_ps as aligned_load;
     pub use arch::_mm_loadu_ps as unaligned_load;
+    pub use arch::_mm_max_ps as max;
+    pub use arch::_mm_min_ps as min;
+    pub use arch::_mm_mul_ps as mul;
+    pub use arch::_mm_or_ps as or;
+    pub use arch::_mm_rcp_ps as recip;
+    pub use arch::_mm_set1_ps as splat;
+    pub use arch::_mm_setr_ps as vec4;
+    pub use arch::_mm_sqrt_ps as sqrt;
+    pub use arch::_mm_store_ps as aligned_store;
+    pub use arch::_mm_storeu_ps as unaligned_store;
+    pub use arch::_mm_sub_ps as sub;
 
     //#[cfg(target_feature="fma")]
     pub use arch::_mm_fmadd_ps as mul_add;
@@ -70,10 +69,7 @@ pub mod x86_64 {
 
     #[inline(always)]
     pub unsafe fn select(cond: f32x4, a: f32x4, b: f32x4) -> f32x4 {
-        or(
-            arch::_mm_andnot_ps(cond, b),
-            and(cond, a),
-        )
+        or(arch::_mm_andnot_ps(cond, b), and(cond, a))
     }
 
     #[inline(always)]
@@ -109,11 +105,11 @@ pub mod x86_64 {
     pub unsafe fn any(a: f32x4) -> bool {
         const MASK_13: i32 = shuffle_mask(1, 0, 3, 2);
         let a13 = arch::_mm_shuffle_ps::<MASK_13>(a, a); // a1, a0, a3, a2
-        let or13 =  or(a13, a); // a0|a1, a0|a1, a2|a3, a2|a3
+        let or13 = or(a13, a); // a0|a1, a0|a1, a2|a3, a2|a3
 
         const MASK_02: i32 = shuffle_mask(2, 0, 0, 0);
         let a02 = arch::_mm_shuffle_ps::<MASK_02>(or13, or13); // a2|a3, a0|a1, a0|a1, a0|a1
-        let or02 =  or(or13, a02);
+        let or02 = or(or13, a02);
 
         let val = get_first_as_int(or02);
         val != 0
@@ -123,8 +119,6 @@ pub mod x86_64 {
     pub unsafe fn get_first(a: f32x4) -> f32 {
         arch::_mm_cvtss_f32(a)
     }
-
-
 
     #[inline(always)]
     pub unsafe fn shift_lower(val: f32x4) -> f32x4 {
@@ -170,24 +164,23 @@ pub mod aarch64 {
         std::mem::transmute(lanes)
     }
 
-
-    pub use arch::vaddq_f32 as add;
-    pub use arch::vsubq_f32 as sub;
-    pub use arch::vmulq_f32 as mul;
-    pub use arch::vdivq_f32 as div;
     pub use arch::vabsq_f32 as abs;
+    pub use arch::vaddq_f32 as add;
+    pub use arch::vdivq_f32 as div;
+    pub use arch::vmulq_f32 as mul;
     pub use arch::vnegq_f32 as minus;
+    pub use arch::vsubq_f32 as sub;
 
-    pub use arch::vsqrtq_f32 as sqrt;
-    pub use arch::vrndq_f32 as floor;
-    //pub use arch::_mm_ceil_ps as ceil;
-    pub use arch::vrecpeq_f32 as recip;
-    pub use arch::vmin_f32 as min;
-    pub use arch::vmax_f32 as max;
-    pub use arch::vceqq_f32 as eq;
-    pub use arch::vcltq_f32 as lt;
-    pub use arch::vcgtq_f32 as gt;
     pub use arch::vandq_u32 as and;
+    pub use arch::vceqq_f32 as eq;
+    pub use arch::vcgtq_f32 as gt;
+    pub use arch::vcltq_f32 as lt;
+    pub use arch::vmaxq_f32 as max;
+    pub use arch::vminq_f32 as min;
+    pub use arch::vrecpeq_f32 as recip;
+    pub use arch::vrndpq_f32 as ceil_positive; // vrndpq_f32 roudns towards +infinity so it only matches ceil for positive values
+    pub use arch::vrndq_f32 as floor;
+    pub use arch::vsqrtq_f32 as sqrt;
 
     // Note: arch::vceqzq_u32 as not; is similar but leaves all
     // of the bits to 0 or 1 in a lane instead of considering
@@ -195,11 +188,10 @@ pub mod aarch64 {
     pub use arch::vmvnq_u32 as not;
     pub use arch::vorrq_u32 as or;
     //pub use arch::_mm_cvt_ss2si as get_first_as_int;
-    pub use arch::vst1q_f32 as aligned_store;
-    pub use arch::vst1q_f32 as unaligned_store;
     pub use arch::vld1q_f32 as aligned_load;
     pub use arch::vld1q_f32 as unaligned_load;
-
+    pub use arch::vst1q_f32 as aligned_store;
+    pub use arch::vst1q_f32 as unaligned_store;
 
     #[inline(always)]
     pub unsafe fn mul_add(m1: f32x4, m2: f32x4, add: f32x4) -> f32x4 {
@@ -213,8 +205,8 @@ pub mod aarch64 {
 
     pub use arch::vbslq_f32 as select; // (if: CondMask, then: f32x4, else: f32x4) -> f32x4
 
-    use arch::vreinterpretq_u32_f32 as reinterpret_f32_to_u32;
     use arch::vreinterpretq_f32_u32 as reinterpret_u32_to_f32;
+    use arch::vreinterpretq_u32_f32 as reinterpret_f32_to_u32;
 
     #[inline(always)]
     pub unsafe fn get_first(a: f32x4) -> f32 {
@@ -244,9 +236,10 @@ pub mod aarch64 {
 
     #[inline(always)]
     pub unsafe fn signum(a: f32x4) -> f32x4 {
-        reinterpret_u32_to_f32(
-            or(sign_bit(a), splat_u32(0b00111111100000000000000000000000))
-        )
+        reinterpret_u32_to_f32(or(
+            sign_bit(a),
+            splat_u32(0b00111111100000000000000000000000),
+        ))
     }
 
     #[inline(always)]
@@ -265,7 +258,6 @@ pub use x86_64::*;
 
 #[cfg(target_arch = "aarch64")]
 pub use aarch64::*;
-
 
 #[inline(always)]
 pub unsafe fn sample_cubic_horner_simd4(
@@ -318,12 +310,7 @@ pub unsafe fn sample_cubic_horner_interlaved_simd4(
 }
 
 #[inline(always)]
-pub unsafe fn sample_quadratic_horner_simd4(
-    a0: f32x4,
-    a1: f32x4,
-    a2: f32x4,
-    t: f32x4,
-) -> f32x4 {
+pub unsafe fn sample_quadratic_horner_simd4(a0: f32x4, a1: f32x4, a2: f32x4, t: f32x4) -> f32x4 {
     let mut p = a0;
     p = mul_add(a1, t, p);
     p = mul_add(a2, mul(t, t), p);
@@ -357,10 +344,7 @@ impl AlignedBuf {
     pub unsafe fn ptr(&mut self, offset: usize) -> *mut f32 {
         self.0.assume_init_mut().as_mut_ptr().add(offset)
     }
-
 }
-
-
 
 #[test]
 pub fn sanity_check() {
@@ -369,32 +353,66 @@ pub fn sanity_check() {
         const FALSE: u32 = 0;
 
         fn eps_eq(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> bool {
-            fn e(a: f32, b: f32) -> bool { (a - b).abs() < 0.0001 }
+            fn e(a: f32, b: f32) -> bool {
+                (a - b).abs() < 0.0001
+            }
             e(a.0, b.0) && e(a.1, b.1) && e(a.2, b.2) && e(a.3, b.3)
         }
 
         assert_eq!(unpack(splat(1.0)), unpack(vec4(1.0, 1.0, 1.0, 1.0)));
         assert_eq!(unpack(vec4(1.0, 2.0, 3.0, 4.0)), (1.0, 2.0, 3.0, 4.0));
         assert_eq!(get_first(vec4(1.0, 2.0, 3.0, 4.0)), 1.0);
-        assert_eq!(unpack_u32(eq(vec4(1.0, 2.0, 3.0, 4.0), vec4(2.0, 2.0, 2.0, 2.0))), (FALSE, TRUE, FALSE, FALSE));
-        assert_eq!(unpack_u32(neq(vec4(1.0, 2.0, 3.0, 4.0), vec4(2.0, 2.0, 2.0, 2.0))), (TRUE, FALSE, TRUE, TRUE));
+        assert_eq!(
+            unpack_u32(eq(vec4(1.0, 2.0, 3.0, 4.0), vec4(2.0, 2.0, 2.0, 2.0))),
+            (FALSE, TRUE, FALSE, FALSE)
+        );
+        assert_eq!(
+            unpack_u32(neq(vec4(1.0, 2.0, 3.0, 4.0), vec4(2.0, 2.0, 2.0, 2.0))),
+            (TRUE, FALSE, TRUE, TRUE)
+        );
         let lt_cond = lt(vec4(1.0, 2.0, 3.0, 4.0), vec4(2.0, 2.0, 2.0, 2.0));
         let gt_cond = gt(vec4(1.0, 2.0, 3.0, 4.0), vec4(2.0, 2.0, 2.0, 2.0));
         assert_eq!(unpack_u32(lt_cond), (TRUE, FALSE, FALSE, FALSE));
         assert_eq!(unpack_u32(gt_cond), (FALSE, FALSE, TRUE, TRUE));
-        assert_eq!(unpack(select(lt_cond, splat(1.0), splat(2.0))), (1.0, 2.0, 2.0, 2.0));
-        assert_eq!(unpack_u32(is_finite(vec4(f32::NAN, f32::INFINITY, -f32::INFINITY, 42.0))), (FALSE, FALSE, FALSE, TRUE));
-        assert_eq!(unpack(signum(vec4(0.0, -0.0, 1.0, -2.0))), (1.0, -1.0, 1.0, -1.0));
+        assert_eq!(
+            unpack(select(lt_cond, splat(1.0), splat(2.0))),
+            (1.0, 2.0, 2.0, 2.0)
+        );
+        assert_eq!(
+            unpack_u32(is_finite(vec4(
+                f32::NAN,
+                f32::INFINITY,
+                -f32::INFINITY,
+                42.0
+            ))),
+            (FALSE, FALSE, FALSE, TRUE)
+        );
+        assert_eq!(
+            unpack(signum(vec4(0.0, -0.0, 1.0, -2.0))),
+            (1.0, -1.0, 1.0, -1.0)
+        );
         assert!(any(eq(vec4(1.0, 1.0, 1.0, 1.0), splat(1.0))));
         assert!(any(eq(vec4(1.0, 0.0, 0.0, 0.0), splat(1.0))));
         assert!(any(eq(vec4(0.0, 1.0, 0.0, 0.0), splat(1.0))));
         assert!(any(eq(vec4(0.0, 0.0, 1.0, 0.0), splat(1.0))));
         assert!(any(eq(vec4(0.0, 0.0, 0.0, 1.0), splat(1.0))));
         assert!(!any(eq(vec4(0.0, 0.0, 0.0, 0.0), splat(1.0))));
-        assert_eq!(unpack(select_or_zero(lt_cond, vec4(1.0, 2.0, 3.0, 4.0))), unpack(vec4(1.0, 0.0, 0.0, 0.0)));
-        assert_eq!(unpack(abs(vec4(1.0, -1.0, -0.0, -3.1415))), (1.0, 1.0, 0.0, 3.1415));
-        assert!(eps_eq(unpack(mul_add(vec4(1.0, 2.0, 3.0, 4.0), splat(2.0), splat(3.0))), (5.0, 7.0, 9.0, 11.0)));
-        assert!(eps_eq(unpack(mul_sub(vec4(1.0, 2.0, 3.0, 4.0), splat(2.0), splat(3.0))), (-1.0, 1.0, 3.0, 5.0)));
+        assert_eq!(
+            unpack(select_or_zero(lt_cond, vec4(1.0, 2.0, 3.0, 4.0))),
+            unpack(vec4(1.0, 0.0, 0.0, 0.0))
+        );
+        assert_eq!(
+            unpack(abs(vec4(1.0, -1.0, -0.0, -3.1415))),
+            (1.0, 1.0, 0.0, 3.1415)
+        );
+        assert!(eps_eq(
+            unpack(mul_add(vec4(1.0, 2.0, 3.0, 4.0), splat(2.0), splat(3.0))),
+            (5.0, 7.0, 9.0, 11.0)
+        ));
+        assert!(eps_eq(
+            unpack(mul_sub(vec4(1.0, 2.0, 3.0, 4.0), splat(2.0), splat(3.0))),
+            (-1.0, 1.0, 3.0, 5.0)
+        ));
         println!("sign {:?}", sign_bit(vec4(0.0, -0.0, 1.0, -2.0)));
         //println!("shift lower {:?}", shift_lower(vec4(1.0, 2.0, 3.0, 4.0)));
 

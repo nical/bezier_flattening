@@ -1,5 +1,5 @@
-use crate::{LineSegment, CubicBezierSegment, point};
 use crate::{fast_ceil, fast_cubic_root, fast_recip, split_range};
+use crate::{point, CubicBezierSegment, LineSegment};
 
 fn num_quadratics(curve: &CubicBezierSegment, tolerance: f32) -> f32 {
     let q = curve.from - curve.to + (curve.ctrl2 - curve.ctrl1) * 3.0;
@@ -9,7 +9,7 @@ fn num_quadratics(curve: &CubicBezierSegment, tolerance: f32) -> f32 {
 
 pub fn flatten_cubic<F>(curve: &CubicBezierSegment, tolerance: f32, callback: &mut F)
 where
-    F:  FnMut(&LineSegment)
+    F: FnMut(&LineSegment),
 {
     let simplify_tolerance = tolerance * 0.2;
     let flatten_tolerance = tolerance - simplify_tolerance;
@@ -50,7 +50,7 @@ const NUM_QUADS: usize = 16;
 #[cfg_attr(target_arch = "x86_64", target_feature(enable = "fma"))]
 pub unsafe fn flatten_cubic_simd4<F>(curve: &CubicBezierSegment, tolerance: f32, callback: &mut F)
 where
-    F:  FnMut(&LineSegment)
+    F: FnMut(&LineSegment),
 {
     use crate::simd4::*;
 
@@ -86,7 +86,7 @@ where
                 a1y: a1y.ptr(quad_offset),
                 a2x: a2x.ptr(quad_offset),
                 a2y: a2y.ptr(quad_offset),
-            }
+            },
         );
 
         let is_last = quad_offset + NUM_QUADS >= num_quads as usize;
@@ -157,7 +157,10 @@ unsafe fn flattening_params_simd4(
     use crate::simd4::*;
 
     let quad_step = splat(s_quad_step);
-    let mut t0 = mul(add(splat(s_first_quad), vec4(0.0, 1.0, 2.0, 3.0)), quad_step);
+    let mut t0 = mul(
+        add(splat(s_first_quad), vec4(0.0, 1.0, 2.0, 3.0)),
+        quad_step,
+    );
     let mut t1 = add(t0, quad_step);
     let quad_step_4 = mul(quad_step, splat(4.0));
     let mut quad_idx = 0;
@@ -175,9 +178,11 @@ unsafe fn flattening_params_simd4(
         let a3_x = splat(s_poly.a3.x);
         let a3_y = splat(s_poly.a3.y);
 
-        let (from_x, from_y) = sample_cubic_horner_simd4(a0_x, a0_y, a1_x, a1_y, a2_x, a2_y, a3_x, a3_y, t0);
+        let (from_x, from_y) =
+            sample_cubic_horner_simd4(a0_x, a0_y, a1_x, a1_y, a2_x, a2_y, a3_x, a3_y, t0);
         // TODO: 3 out of 4 values are already in from_
-        let (to_x, to_y) = sample_cubic_horner_simd4(a0_x, a0_y, a1_x, a1_y, a2_x, a2_y, a3_x, a3_y, t1);
+        let (to_x, to_y) =
+            sample_cubic_horner_simd4(a0_x, a0_y, a1_x, a1_y, a2_x, a2_y, a3_x, a3_y, t1);
 
         // Compute the control points of the sub-curves.
 
@@ -197,8 +202,14 @@ unsafe fn flattening_params_simd4(
         let one_t0 = sub(one, t0);
         let one_t0_2 = mul(one_t0, one_t0);
         let two_t0_one_t0 = mul(two, mul(one_t0, t0));
-        let qx = add(mul_add(qx0, one_t0_2, mul(qx1, two_t0_one_t0)), mul(qx2, t0_2));
-        let qy = add(mul_add(qy0, one_t0_2, mul(qy1, two_t0_one_t0)), mul(qy2, t0_2));
+        let qx = add(
+            mul_add(qx0, one_t0_2, mul(qx1, two_t0_one_t0)),
+            mul(qx2, t0_2),
+        );
+        let qy = add(
+            mul_add(qy0, one_t0_2, mul(qy1, two_t0_one_t0)),
+            mul(qy2, t0_2),
+        );
 
         let ctrl1_x = mul_add(qx, quad_step, from_x);
         let ctrl1_y = mul_add(qy, quad_step, from_y);
@@ -208,8 +219,14 @@ unsafe fn flattening_params_simd4(
         let one_t1 = sub(one, t1);
         let one_t1_2 = mul(one_t1, one_t1);
         let two_t1_one_t1 = mul(two, mul(one_t1, t1));
-        let qx = add(mul_add(qx0, one_t1_2, mul(qx1, two_t1_one_t1)), mul(qx2, t1_2));
-        let qy = add(mul_add(qy0, one_t1_2, mul(qy1, two_t1_one_t1)), mul(qy2, t1_2));
+        let qx = add(
+            mul_add(qx0, one_t1_2, mul(qx1, two_t1_one_t1)),
+            mul(qx2, t1_2),
+        );
+        let qy = add(
+            mul_add(qy0, one_t1_2, mul(qy1, two_t1_one_t1)),
+            mul(qy2, t1_2),
+        );
 
         let ctrl2_x = sub(to_x, mul(qx, quad_step));
         let ctrl2_y = sub(to_y, mul(qy, quad_step));
@@ -229,7 +246,7 @@ unsafe fn flattening_params_simd4(
         let ly = mul(sub(add(to_y, from_y), mul(ctrl_y, two)), two);
         let recip_8tol = recip(splat(tolerance * 8.0));
         let num_segments = sqrt(mul(sqrt(add(mul(lx, lx), mul(ly, ly))), recip_8tol));
-        let num_segments = max(splat(1.0), ceil(num_segments));
+        let num_segments = max(splat(1.0), ceil_positive(num_segments));
 
         // Convert the quadratic curves into polynomial form.
         let a1_x = mul(sub(ctrl_x, from_x), two);
