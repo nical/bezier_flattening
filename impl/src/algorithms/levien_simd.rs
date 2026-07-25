@@ -325,7 +325,7 @@ unsafe fn flattening_params_simd4(
 #[inline(never)]
 #[cfg_attr(target_arch = "x86_64", target_feature(enable = "avx"))]
 #[cfg_attr(target_arch = "x86_64", target_feature(enable = "fma"))]
-pub unsafe fn flatten_cubic_simd4(curve: &CubicBezierSegment, tolerance: f32, cb: &mut dyn FnMut(&LineSegment)) {
+pub unsafe fn flatten_cubic_simd4(curve: &CubicBezierSegment, tolerance: f32, cb: &mut impl FnMut(&LineSegment)) {
 
     let quads_tolerance = tolerance * 0.1;
     let flatten_tolerance = tolerance * 0.9;
@@ -368,12 +368,24 @@ pub unsafe fn flatten_cubic_simd4(curve: &CubicBezierSegment, tolerance: f32, cb
         // Iterate through the quadratics, outputting the points of
         // subdivisions that fall within that quadratic.
         let step = sum / (num_edges as f32);
+        // `step` is loop-invariant, so divide once here and multiply in the loop below.
+        let inv_step = 1.0 / step;
         let mut i = 1;
         let mut scaled_count_sum = 0.0;
         let v_step = splat(step);
+        let num_edges_f = num_edges as f32;
         //println!("------ {num_edges:?} edges step {step:?}");
         for (params, quad) in &quads {
-            let n = u32::min(num_edges, ((scaled_count_sum + params.scaled_count) / step).ceil() as u32);
+            // Clamping in float rather than casting first avoids the saturating
+            // float->int conversion sequence that `as u32` emits. `max` then `min`
+            // maps NaN to 0 and anything too large to num_edges, matching what
+            // `u32::min(num_edges, x as u32)` used to do, and guarantees the value
+            // is in range for the unchecked conversion.
+            let n_f = ((scaled_count_sum + params.scaled_count) * inv_step)
+                .ceil()
+                .max(0.0)
+                .min(num_edges_f);
+            let n: u32 = n_f.to_int_unchecked();
 
             if i < n {
                 let recip_scaled_count = splat(fast_recip(params.scaled_count));
