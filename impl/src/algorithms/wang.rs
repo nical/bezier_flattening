@@ -139,13 +139,15 @@ pub unsafe fn flatten_cubic_simd4<F>(curve: &CubicBezierSegment, tolerance: f32,
 
     // minus one because we'll add the last point explicitly
     let mut n = n as i32 - 1;
-    while n > 0 {
+    // Only the last iteration can be partial, so keep the hot loop free of the
+    // `take` adapter and the per-element counter it needs.
+    while n >= 4 {
         let (x, y) = crate::simd4::sample_cubic_horner_simd4(a0x, a0y, a1x, a1y, a2x, a2y, a3x, a3y, t);
 
         let x: [f32; 4] = std::mem::transmute(x);
         let y: [f32; 4] = std::mem::transmute(y);
 
-        for (x, y) in x.iter().zip(y.iter()).take(n.min(4) as usize) {
+        for (x, y) in x.iter().zip(y.iter()) {
             let p = point(*x, *y);
             callback(&LineSegment { from, to: p });
             from = p;
@@ -153,6 +155,19 @@ pub unsafe fn flatten_cubic_simd4<F>(curve: &CubicBezierSegment, tolerance: f32,
 
         t = add(t, step4);
         n -= 4;
+    }
+
+    if n > 0 {
+        let (x, y) = crate::simd4::sample_cubic_horner_simd4(a0x, a0y, a1x, a1y, a2x, a2y, a3x, a3y, t);
+
+        let x: [f32; 4] = std::mem::transmute(x);
+        let y: [f32; 4] = std::mem::transmute(y);
+
+        for (x, y) in x.iter().zip(y.iter()).take(n as usize) {
+            let p = point(*x, *y);
+            callback(&LineSegment { from, to: p });
+            from = p;
+        }
     }
 
     let to = curve.to;
@@ -184,14 +199,16 @@ pub unsafe fn flatten_quadratic_simd4<F>(curve: &QuadraticBezierSegment, toleran
 
     // minus one because we'll add the last point explicitly
     let mut n = n as i32 - 1;
-    while n > 0 {
+    // Only the last iteration can be partial, so keep the hot loop free of the
+    // `take` adapter and the per-element counter it needs.
+    while n >= 4 {
         let x = crate::simd4::sample_quadratic_horner_simd4(a0x, a1x, a2x, t);
         let y = crate::simd4::sample_quadratic_horner_simd4(a0y, a1y, a2y, t);
 
         let x: [f32; 4] = std::mem::transmute(x);
         let y: [f32; 4] = std::mem::transmute(y);
 
-        for (x, y) in x.iter().zip(y.iter()).take(n.min(4) as usize) {
+        for (x, y) in x.iter().zip(y.iter()) {
             let p = point(*x, *y);
             callback(&LineSegment { from, to: p });
             from = p;
@@ -199,6 +216,20 @@ pub unsafe fn flatten_quadratic_simd4<F>(curve: &QuadraticBezierSegment, toleran
 
         t = add(t, step4);
         n -= 4;
+    }
+
+    if n > 0 {
+        let x = crate::simd4::sample_quadratic_horner_simd4(a0x, a1x, a2x, t);
+        let y = crate::simd4::sample_quadratic_horner_simd4(a0y, a1y, a2y, t);
+
+        let x: [f32; 4] = std::mem::transmute(x);
+        let y: [f32; 4] = std::mem::transmute(y);
+
+        for (x, y) in x.iter().zip(y.iter()).take(n as usize) {
+            let p = point(*x, *y);
+            callback(&LineSegment { from, to: p });
+            from = p;
+        }
     }
 
     let to = curve.to;
