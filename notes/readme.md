@@ -12,6 +12,9 @@ Benchmark results:
   - [AMD Ryzen Threadripper PRO 3975WXs desktop](bench-quadratic-threadripper.md)
   - Apple M1 Max laptop (TODO)
 
+[Optimization attempts](optimization-attempts.md), including the ones that did not work,
+plus notes on profiling and on getting stable measurements.
+
 # Flattening quality
 
 See [a comparison of the number of generated line segments for each test case](edge_count.md)

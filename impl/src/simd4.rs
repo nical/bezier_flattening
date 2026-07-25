@@ -92,6 +92,27 @@ pub mod x86_64 {
         or(and(a, splat(f32::from_bits(1u32 << 31))), splat(1.0))
     }
 
+    /// True if at least one lane of `a` and `b` have differing sign bits.
+    ///
+    /// `signum` only depends on the sign bit, so this is equivalent to
+    /// `any(neq(signum(a), signum(b)))` but does not need to materialize the
+    /// per-lane mask.
+    #[inline(always)]
+    pub unsafe fn any_sign_differs(a: f32x4, b: f32x4) -> bool {
+        arch::_mm_movemask_ps(arch::_mm_xor_ps(a, b)) != 0
+    }
+
+    /// Per-lane mask set where `a` and `b` have differing sign bits.
+    ///
+    /// Equivalent to `neq(signum(a), signum(b))`.
+    #[inline(always)]
+    pub unsafe fn sign_differs_mask(a: f32x4, b: f32x4) -> CondMask {
+        let xored = arch::_mm_castps_si128(arch::_mm_xor_ps(a, b));
+        // Shifting right by 31 bits, sign-extending, broadcasts the sign bit
+        // over the whole lane.
+        arch::_mm_castsi128_ps(arch::_mm_srai_epi32::<31>(xored))
+    }
+
     #[inline(always)]
     pub unsafe fn not(a: f32x4) -> f32x4 {
         and_not(a, a)
@@ -240,6 +261,35 @@ pub mod aarch64 {
             sign_bit(a),
             splat_u32(0b00111111100000000000000000000000),
         ))
+    }
+
+    /// True if at least one lane of `a` and `b` have differing sign bits.
+    ///
+    /// `signum` only depends on the sign bit, so this is equivalent to
+    /// `any(neq(signum(a), signum(b)))` but does not need to materialize the
+    /// per-lane mask.
+    ///
+    /// TODO: the aarch64 version of this and of `sign_differs_mask` was written
+    /// blind (no Apple hardware at hand) and has not been run. Check the
+    /// `simd4::sanity_check` test on a mac before trusting it.
+    #[inline(always)]
+    pub unsafe fn any_sign_differs(a: f32x4, b: f32x4) -> bool {
+        let xored = arch::veorq_u32(reinterpret_f32_to_u32(a), reinterpret_f32_to_u32(b));
+        // A lane with its sign bit set is >= 2^31 when read as an unsigned
+        // integer, so the horizontal unsigned maximum has its sign bit set if
+        // and only if at least one lane does.
+        arch::vmaxvq_u32(xored) >= 0x8000_0000
+    }
+
+    /// Per-lane mask set where `a` and `b` have differing sign bits.
+    ///
+    /// Equivalent to `neq(signum(a), signum(b))`.
+    #[inline(always)]
+    pub unsafe fn sign_differs_mask(a: f32x4, b: f32x4) -> CondMask {
+        let xored = arch::veorq_u32(reinterpret_f32_to_u32(a), reinterpret_f32_to_u32(b));
+        // Shifting right by 31 bits, sign-extending, broadcasts the sign bit
+        // over the whole lane.
+        arch::vreinterpretq_u32_s32(arch::vshrq_n_s32::<31>(arch::vreinterpretq_s32_u32(xored)))
     }
 
     #[inline(always)]
@@ -391,6 +441,26 @@ pub fn sanity_check() {
             unpack(signum(vec4(0.0, -0.0, 1.0, -2.0))),
             (1.0, -1.0, 1.0, -1.0)
         );
+        // `any_sign_differs` / `sign_differs_mask` must agree with the
+        // signum-based formulation they replaced, including for zeroes, NaN and
+        // infinities (signum only looks at the sign bit, so all of these have a
+        // well defined answer).
+        let sign_cases = [
+            (vec4(1.0, 2.0, 3.0, 4.0), vec4(1.0, 2.0, 3.0, 4.0)),
+            (vec4(-1.0, -2.0, -3.0, -4.0), vec4(1.0, 2.0, 3.0, 4.0)),
+            (vec4(1.0, -2.0, 3.0, -4.0), vec4(1.0, 2.0, 3.0, 4.0)),
+            (vec4(0.0, -0.0, 0.0, -0.0), vec4(0.0, 0.0, -0.0, -0.0)),
+            (
+                vec4(f32::NAN, -f32::NAN, f32::INFINITY, -f32::INFINITY),
+                vec4(1.0, 1.0, -1.0, 1.0),
+            ),
+        ];
+        for (a, b) in sign_cases {
+            let reference = neq(signum(a), signum(b));
+            assert_eq!(unpack_u32(sign_differs_mask(a, b)), unpack_u32(reference));
+            assert_eq!(any_sign_differs(a, b), any(reference));
+        }
+
         assert!(any(eq(vec4(1.0, 1.0, 1.0, 1.0), splat(1.0))));
         assert!(any(eq(vec4(1.0, 0.0, 0.0, 0.0), splat(1.0))));
         assert!(any(eq(vec4(0.0, 1.0, 0.0, 0.0), splat(1.0))));

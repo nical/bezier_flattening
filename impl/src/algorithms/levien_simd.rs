@@ -203,12 +203,17 @@ unsafe fn flattening_params_simd4(
 
     let mut scaled_count = mul(integral_diff, sqrt_scale);
 
-    let is_cusp = neq(signum(parabola_from), signum(parabola_to));
     // Handle a cusp case (segment contains curvature maximum)
     // Assuming the cusp case is fairly rare and because it is expensive
     // we add a branch to test wether any of the lanes need to take it
     // and skip it otherwise.
-    if any(is_cusp) {
+    //
+    // The lanes that need it are the ones where the two parabola parameters
+    // have different signs. Testing that directly on the sign bits is much
+    // cheaper than `any(neq(signum(a), signum(b)))`, and the per-lane mask is
+    // only needed on the rare path.
+    if any_sign_differs(parabola_from, parabola_to) {
+        let is_cusp = sign_differs_mask(parabola_from, parabola_to);
         let xmin = div(sqrt_tolerance, sqrt_scale);
         let scaled_count2 = mul(sqrt_tolerance, div(integral_diff, approx_parabola_integral(xmin)));
         scaled_count = select(is_cusp, scaled_count2, scaled_count);
