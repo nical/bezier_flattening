@@ -4,7 +4,9 @@ use crate::{point, CubicBezierSegment, LineSegment};
 fn num_quadratics(curve: &CubicBezierSegment, tolerance: f32) -> f32 {
     let q = curve.from - curve.to + (curve.ctrl2 - curve.ctrl1) * 3.0;
     const K: f32 = 20.784609691; // (12.0 * 3.0f32.sqrt());
-    fast_ceil(fast_cubic_root(tolerance * K * q.length())).max(1.0) // TODO: looks like ceil is not inlined.
+    // Number of quads needed: n^3 = |a3| / (sqrt(432) * tolerance),
+    // so that the quadratic approximations stay within the tolerance.
+    fast_ceil(fast_cubic_root(q.length() / (tolerance * K))).max(1.0) // TODO: looks like ceil is not inlined.
 }
 
 pub fn flatten_cubic<F>(curve: &CubicBezierSegment, tolerance: f32, callback: &mut F)
@@ -79,13 +81,13 @@ where
             quad_step,
             flatten_tolerance,
             &FlatteningParams {
-                num_segments: num_segments.ptr(quad_offset),
-                a0x: a0x.ptr(quad_offset),
-                a0y: a0y.ptr(quad_offset),
-                a1x: a1x.ptr(quad_offset),
-                a1y: a1y.ptr(quad_offset),
-                a2x: a2x.ptr(quad_offset),
-                a2y: a2y.ptr(quad_offset),
+                num_segments: num_segments.ptr(0),
+                a0x: a0x.ptr(0),
+                a0y: a0y.ptr(0),
+                a1x: a1x.ptr(0),
+                a1y: a1y.ptr(0),
+                a2x: a2x.ptr(0),
+                a2y: a2y.ptr(0),
             },
         );
 
@@ -105,9 +107,9 @@ where
             let flatten_step4 = mul(flatten_step, splat(4.0));
 
             let mut n = num_segments as i32;
-            if is_last && i + 1 == n as usize {
-                // We'll add the last one manually so that it is exactly
-                // at the endpoint.
+            if is_last && i + 1 == quad_count {
+                // This is the last quad of the curve. We'll add the last one
+                // manually so that it is exactly at the endpoint.
                 n -= 1;
             }
             while n > 0 {
