@@ -190,21 +190,28 @@ pub fn flatten_cubic_scalar(curve: &CubicBezierSegment, tolerance: f32, cb: &mut
         let mut scaled_count_sum = 0.0;
         //println!("------ {num_edges:?} edges step {step:?}");
         for (params, quad) in &quads {
-            let mut target = (i as f32) * step;
-            //println!("  target {target} ({i})");
-            let recip_scaled_count = params.scaled_count.recip();
-            while target < scaled_count_sum + params.scaled_count {
-                let u = (target - scaled_count_sum) * recip_scaled_count;
-                let t = params.get_t(u);
-                let to = quad.sample(t);
-                //println!("     u={u}, t={t}");
-                cb(&LineSegment { from, to });
-                from = to;
-                if i == num_edges {
-                    break;
+            // Degenerate quads have a scaled_count of zero. `recip` turns that
+            // into infinity and the target can land just below the accumulated
+            // sum, producing NaN points, so skip them. The chord across a
+            // degenerate (straight) quad is exact and comes out of the
+            // connect-through segments.
+            if params.scaled_count > 0.0 {
+                let mut target = (i as f32) * step;
+                //println!("  target {target} ({i})");
+                let recip_scaled_count = params.scaled_count.recip();
+                while target < scaled_count_sum + params.scaled_count {
+                    let u = (target - scaled_count_sum) * recip_scaled_count;
+                    let t = params.get_t(u);
+                    let to = quad.sample(t);
+                    //println!("     u={u}, t={t}");
+                    cb(&LineSegment { from, to });
+                    from = to;
+                    if i == num_edges {
+                        break;
+                    }
+                    i += 1;
+                    target = (i as f32) * step;
                 }
-                i += 1;
-                target = (i as f32) * step;
             }
             scaled_count_sum += params.scaled_count;
         }
@@ -293,7 +300,10 @@ pub fn num_quadratics_impl(curve: &CubicBezierSegment, tolerance: f32) -> usize 
     let x = curve.from.x - 3.0 * curve.ctrl1.x + 3.0 * curve.ctrl2.x - curve.to.x;
     let y = curve.from.y - 3.0 * curve.ctrl1.y + 3.0 * curve.ctrl2.y - curve.to.y;
 
-    let err = x * x + y * y / (432.0 * tolerance * tolerance);
+    // The number of quadratics: n^6 = |a3|^2 / (432 * tolerance^2), the same
+    // formula as kurbo's to_quads. Note the parens: dividing only the y term
+    // made the count (partially) tolerance-independent.
+    let err = (x * x + y * y) / (432.0 * tolerance * tolerance);
 
     // The original version of this method was:
     // let n_quads = (err.powf(1. / 6.0).ceil() as usize).max(1);
