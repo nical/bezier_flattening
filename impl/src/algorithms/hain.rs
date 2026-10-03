@@ -90,11 +90,11 @@ pub fn flatten_cubic<F: FnMut(&LineSegment)>(
         }
 
         if t2_max < 1.0 {
-            let after = bezier.after_split(t1_max);
+            let after = bezier.after_split(t2_max);
             call_back(&LineSegment { from, to: after.from });
             flatten_cubic_no_inflection(after, tolerance, call_back);
         } else {
-            call_back(&LineSegment { from, to: bezier.from });
+            call_back(&LineSegment { from, to: bezier.to });
         }
     }
 }
@@ -220,10 +220,17 @@ pub(crate) fn find_cubic_bezier_inflection_points(
     }
 
     if discriminant < EPSILON {
+        // The two roots are merged into a double root at the midpoint.
+        // Extrapolating the approximation range from a root outside of the
+        // curve would produce points off the curve, so only use it when it
+        // is in range and treat the curve as inflection-free otherwise.
         let t = -b / (2.0 * a);
 
-        *t1 = t;
-        return 1;
+        if in_range(t) {
+            *t1 = t;
+            return 1;
+        }
+        return 0;
     }
 
     // This code is derived from https://www2.units.it/ipl/students_area/imm2/files/Numerical_Recipes.pdf page 184.
