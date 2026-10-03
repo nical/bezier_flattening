@@ -74,6 +74,8 @@ pub fn cubic_is_flat(curve: &CubicBezierSegment, tolerance: f32) -> bool {
     let baseline_len2 = baseline.square_length();
     let d1 = c1 * c1;
     let d2 = c2 * c2;
+    let dot1 = baseline.dot(v1);
+    let dot3 = baseline.dot(v3);
 
     let factor = if (c1 * c2) > 0.0 {
         3.0 / 4.0
@@ -89,8 +91,16 @@ pub fn cubic_is_flat(curve: &CubicBezierSegment, tolerance: f32) -> bool {
         // TODO: This check is missing from CubicBezierSegment::is_linear, which
         // misses flat-ish curves with control points that aren't between the
         // endpoints.
-        && (baseline.dot(v1) > -tolerance)
-        && (baseline.dot(v3) < tolerance)
+        //
+        // The projections of the control points on the baseline must not
+        // overshoot the endpoints by more than the tolerance. The dot
+        // products are in squared length units, so comparing them directly
+        // against the tolerance mixed the two scales: large curves paid
+        // extra subdivision for tiny overshoots while tiny curves accepted
+        // control points far outside. Compare the squared dots against the
+        // threshold instead; non-overshooting projections always pass.
+        && (dot1 >= 0.0 || dot1 * dot1 <= threshold)
+        && (dot3 <= 0.0 || dot3 * dot3 <= threshold)
 }
 
 // Note: The inline annotation here makes a huge difference for `linear`.
