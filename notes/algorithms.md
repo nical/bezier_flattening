@@ -1,28 +1,42 @@
 # Algorithms
 
-`Recursive` is the most straightforward recursive flattening algorithm, with a the following flatness criteria:
- - `recursive`: The flatness criterion implemented in lyon (TODO: find where it came from).
- - `recrusive-hfd`: The flatness criterion from "Hybrid forward differencing"
- - `recursive-agg`: The flatness criterion from [Antigrain Geometry](https://agg.sourceforge.net/antigrain.com/research/adaptive_bezier/index.html)
+The notes are organized per algorithm family. An algorithm may have several
+implementations in this repository (scalar, SIMD variants, experiments, or an
+external reference implementation); each note lists them with the labels used
+in the [benchmarks](readme.md) and [edge counts](edge_count.md).
 
-`Linear` is a rather naive sequential algorithm searching of the next split point at each step and splitting the flat part out of the curve once found. This algorithm is also implemented with the same three flatness criteria.
-
-[`Levien`](levien.md) is Raph Levien's flattening algorithm as implemented in Kurbo. It includes the fractional subdivision scheme when flattening cubic curves.
-
-`Levien-quads` is Raph Levien's flattening algorithm without the fractional subdivision scheme. Cubic bézier curves are approximated with quadratics which are flattened independently.
-
-`Wang` is a fixed step flattening algorithm using Wang's formula to compute the number of subdivisions required to satisfy the tolerance parameter.
-
-`Yzerman` is the flattening algorithm described by Fabian Yzerman in [Fast approaches to simplify and offset Bézier curves within specified error limits](https://blend2d.com/research/simplify_and_offset_bezier_curves.pdf).
-
-`Fwd-diff` is a simple implementation of forward differencing using Wang's formulat to compute the fixed flattening step.
-
-`Hfd` is an implementation of the hybrid forward differencing algorithm which is used in WPF's rasterizer (a predecessor of Direct2D).
-
-[`Hain`](hain.md) is an implementation of [Hain's paper: Precise flattening of cubic bézier curve segments](http://sibgrapi.sid.inpe.br/col/sid.inpe.br/banon/2004/08.13.18.12/doc/BezierOffsetRendering.pdf).
-
-`Fixed-16` Simply split all curves into 16 segments at regular intervals (it does not satisfy a tolerance parameter).
+- [Recursive subdivision](recursive.md): the classic adaptive bisection
+  flattening, generic over a [flatness criterion](flatness.md).
+  Implementations: `Recursive`, plus the `RecursiveHfd` / `RecursiveAgg`
+  criterion variants.
+- [Linear scanning](linear.md): a non-recursive variant that repeatedly emits
+  the longest flat prefix of the remaining curve, also generic over the
+  [flatness criterion](flatness.md).
+  Implementations: `Linear`, plus the `LinearHfd` / `LinearAgg` variants.
+- [Levien's algorithm](levien.md): approximates cubics with quadratics, and
+  flattens them with a fractional subdivision scheme.
+  Implementations: `Levien`, `LevienQuads`, `LevienSimd`, the
+  `LevienSimd2/3/Buf` experiments, the size-dispatching hybrid `LevienLinear`,
+  and `Kurbo` (the kurbo crate's implementation, used as an external
+  reference).
+- [Wang's formula](wang.md): computes a fixed segment count up-front and
+  samples at regular parameter intervals.
+  Implementations: `Wang`, `WangSimd4`.
+- [Forward differencing](fwd_diff.md): evaluates the curve incrementally with
+  a fixed step count (the same count as Wang).
+  Implementations: `FwdDiff`.
+- [Hybrid forward differencing](hfd.md): the adaptive variant of forward
+  differencing, with step halving/doubling; the basis of WPF's rasterizer.
+  Implementations: `HybridFwdDiff`.
+- [Yzerman](yzerman.md): approximates cubics with quadratics, each flattened
+  with Wang's segment count.
+  Implementations: `Yzerman`, `YzermanSimd4`.
+- [Hain](hain.md): flattens between inflection points using a quadratic
+  approximation of the curve.
+  Implementations: `Hain`.
+- [Fixed splitting](fixed.md): tolerance-ignoring baselines.
+  Implementations: `Fixed1`, `Fixed16`.
 
 # Caveats
 
-- A fair amount of effort has already gone into speeding up `levien` using 128-bit wide SIMD intrinsics. More effort is underway, most of the other algorithms did not get much performance work yet, so number will probably change.
+- A fair amount of effort has already gone into speeding up `levien` using 128-bit wide SIMD intrinsics. More effort is underway, most of the other algorithms did not get much performance work yet, so numbers will probably change.

@@ -8,7 +8,20 @@ The idea behind this algorithm is that for a "small enough step", the third orde
 
 # Summary
 
-In a nutshell, the algorithm is based on a circular approximation of the curve that is applied iteratively. This approximation fails near inflection points, so parts near the inflection points are handled separately and the sub-curve segments in-between are flattened using in an iterative process in which at each step, the longest part of the curve that can be approximated with a line segment is computed, pushed into the result and removed from the curve.
+In a nutshell, the algorithm is based on a circular approximation of the curve that is applied iteratively. This approximation fails near inflection points, so parts near the inflection points are handled separately and the sub-curve segments in-between are flattened using an iterative process in which at each step, the longest part of the curve that can be approximated with a line segment is computed, pushed into the result and removed from the curve.
+
+# Performance
+
+The up-front work is an inflection point analysis of the curve (solving for the
+inflection parameters with a numerically stable quadratic root solver), after
+which the sub-curves between inflection ranges are flattened iteratively by
+extracting the longest flattenable prefix at each step.
+
+In the [edge counts](edge_count.md) (label `hain`) the algorithm produces the
+fewest segments of all algorithms at small tolerances (roughly 0.01 to 0.075 on
+the tiger dataset), but degrades at larger tolerances where it produces the
+most; its speed follows the same pattern in the [benchmarks](bench-cubic-threadripper.md).
+Cubic curves only.
 
 # Issues
 
