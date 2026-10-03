@@ -5,10 +5,6 @@ pub trait CubicFlatness {
     fn is_flat(curve: &CubicBezierSegment, tolerance: f32) -> bool;
 }
 
-pub trait QuadraticFlatness {
-    fn is_flat(curve: &CubicBezierSegment, tolerance: f32) -> bool;
-}
-
 pub struct DefaultFlatness;
 impl CubicFlatness for DefaultFlatness {
     #[inline]
