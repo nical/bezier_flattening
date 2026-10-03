@@ -1,8 +1,9 @@
 # Edge count
 
-To produce the edge counts: `cargo test -- edge_count_cubic --nocapture`
+To produce the edge counts (from `impl/`): `cargo test --release edge_count_cubic`
 
 The `FLATTEN_INPUT` environment variable to filter the input data set also applies.
+Set `FLATTEN_OUTPUT` to a file path to write the markdown table there instead of printing it.
 
 
 ## Inkscape
@@ -10,7 +11,7 @@ The `FLATTEN_INPUT` environment variable to filter the input data set also appli
 ### Cubic bézier curves:
 
 ![Inkscape dataset](results/edge-count-cubic-inkscape.svg)
-[Data](results/edge-count-cubic-inkscape.md) ([Normalized](results/edge-count-cubic-inkscape-normalized.md))[
+[Data](results/edge-count-cubic-inkscape.md) ([Normalized](results/edge-count-cubic-inkscape-normalized.md))
 
 ### Quadratic bézier curves:
 
@@ -52,8 +53,8 @@ The `FLATTEN_INPUT` environment variable to filter the input data set also appli
 
 ### Quadratic bézier curves:
 
-![Font dataset](results/edge-count-font-all.svg)
-[Data](results/edge-count-font-all.md) ([Normalized](results/edge-count-font-all-normalized.md))
+![Font dataset](results/edge-count-quadratic-font.svg)
+[Data](results/edge-count-quadratic-font.md) ([Normalized](results/edge-count-quadratic-font-normalized.md))
 
 
 ## All

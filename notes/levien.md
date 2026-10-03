@@ -1,6 +1,6 @@
 # Raph Levien's flattening algorithm
 
-[Implementation in this repository](https://github.com/nical/misc/blob/master/flatten/src/algorithms/levien.rs) ([simd version](https://github.com/nical/misc/blob/master/flatten/src/algorithms/levien_simd.rs))
+[Implementation in this repository](../impl/src/algorithms/levien.rs) ([simd version](../impl/src/algorithms/levien_simd.rs))
 
 
 Raph explains the maths behind the the flattening of quadratic bézier curves in this blog post: https://raphlinus.github.io/graphics/curves/2019/12/23/flatten-quadbez.html
@@ -42,7 +42,7 @@ fn flatten_cubic(curve, tolerance, callback) {
 
 # Notes
 
-This algorithm produces the "nicest" output, and is generally the most optimal in terms of number of line segments produced per curve. The up-front cost of the algorithm, however, is quite high. This cost is well amortized for curves that require a lot of line segments, but this algorithm probably does not hit the best tradeoff when dealing with a lot of very small curves that will produce few segments. See for example the [benchmark results for the font dataset](../benches/results-cubic-font-threadripper.svg). Thankfully, it should be fairly cheap to evaluate a rough proxy for the size of the curve and pick a different algorithm if it is very small.
+This algorithm produces the "nicest" output, and is generally the most optimal in terms of number of line segments produced per curve. The up-front cost of the algorithm, however, is quite high. This cost is well amortized for curves that require a lot of line segments, but this algorithm probably does not hit the best tradeoff when dealing with a lot of very small curves that will produce few segments. See for example the [benchmark results for the font dataset](results/bench-cubic-font-threadripper.svg). Thankfully, it should be fairly cheap to evaluate a rough proxy for the size of the curve and pick a different algorithm if it is very small.
 
 # Stats
 
