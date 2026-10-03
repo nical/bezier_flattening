@@ -43,9 +43,12 @@ impl CubicFlatness for AggFlatness {
         let c1 = baseline.cross(curve.ctrl1 - curve.to);
         let c2 = baseline.cross(curve.ctrl2 - curve.to);
 
-        let flat = (c1 + c2) * (c1 + c2) <= tolerance * tolerance * baseline.square_length();
-
-        flat
+        // AGG takes the (non-negative) distances of the control points from
+        // the baseline. Summing the signed crosses instead lets control
+        // points on opposite sides of the baseline cancel out, marking
+        // strongly S-shaped curves as flat.
+        (c1.abs() + c2.abs()) * (c1.abs() + c2.abs())
+            <= tolerance * tolerance * baseline.square_length()
     }
 }
 
