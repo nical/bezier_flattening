@@ -27,6 +27,8 @@ Bench/edge-count labels: `yzerman`, `yzerman-simd`.
   fractional subdivision logic, while keeping the two-stage structure.
 - Several times faster than `levien` and somewhat slower than `wang` in the
   benchmarks.
-- Its edge counts land between `wang` and `levien`: the cubic→quadratic
-  approximation costs edges compared to Levien's fractional subdivision, see
-  the [edge counts](edge_count.md).
+- Its edge counts land between `wang` and `levien` on the tiger, font and
+  inkscape datasets, but above `wang` on nehab (and on the merged dataset,
+  which nehab dominates): the cubic→quadratic approximation costs edges
+  compared to Levien's fractional subdivision, see the
+  [edge counts](edge_count.md).
