@@ -84,42 +84,87 @@ fn quad_distance_to_point(
     d0.min((quad.sample(t) - pos).length())
 }
 
-fn compute_cubic_error<F: Flatten>(curves: &[CubicBezierSegment], tolerance: f32) -> f32 {
+// Collect the error of each curve individually (the curve's maximum deviation
+// from its own polyline), so that the test can aggregate max, mean and median
+// over the corpus.
+fn compute_cubic_curve_errors<F: Flatten>(
+    curves: &[CubicBezierSegment],
+    tolerance: f32,
+) -> Vec<f32> {
     let mut poly = Vec::new();
-    let mut max_error: f32 = 0.0;
+    let mut errors = Vec::with_capacity(curves.len());
     for curve in curves {
         poly.push(curve.from);
         F::cubic(&curve, tolerance, &mut |seg| {
             poly.push(seg.to);
         });
 
-        max_error = max_error.max(compute_error(curve, &poly).0);
+        errors.push(compute_error(curve, &poly).0);
         poly.clear();
     }
 
-    max_error
+    errors
+}
+
+// (max, mean, median) of a per-curve error sample.
+fn error_stats(errors: &[f32]) -> (f32, f32, f32) {
+    if errors.is_empty() {
+        return (0.0, 0.0, 0.0);
+    }
+    let mut max = 0.0f32;
+    let mut sum = 0.0f64;
+    for e in errors {
+        max = max.max(*e);
+        sum += *e as f64;
+    }
+    let mut sorted = errors.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let mid = sorted.len() / 2;
+    let median = if sorted.len() % 2 == 1 {
+        sorted[mid]
+    } else {
+        (sorted[mid - 1] + sorted[mid]) / 2.0
+    };
+
+    (max, (sum / sorted.len() as f64) as f32, median)
 }
 
 #[test]
 fn cubic_error() {
     let curves = generate_bezier_curves();
 
-    let mut linear: Vec<f32> = Vec::new();
-    let mut levien: Vec<f32> = Vec::new();
-    let mut levien_simd: Vec<f32> = Vec::new();
-    let mut levien_linear: Vec<f32> = Vec::new();
-    let mut wang: Vec<f32> = Vec::new();
-    let mut wang_simd: Vec<f32> = Vec::new();
-    let mut hain: Vec<f32> = Vec::new();
+    // Per algorithm: (name, [max, mean, median] rows, one value per tolerance).
+    // The aggregation population is the set of curves: each curve contributes
+    // its maximum deviation from its own polyline.
+    let mut results: Vec<(&'static str, [Vec<f32>; 3])> = Vec::new();
+    results.push(("linear     ", [Vec::new(), Vec::new(), Vec::new()]));
+    results.push(("levien     ", [Vec::new(), Vec::new(), Vec::new()]));
+    results.push(("levien-simd", [Vec::new(), Vec::new(), Vec::new()]));
+    results.push(("levien-linear", [Vec::new(), Vec::new(), Vec::new()]));
+    results.push(("wang", [Vec::new(), Vec::new(), Vec::new()]));
+    results.push(("wang-simd", [Vec::new(), Vec::new(), Vec::new()]));
+    results.push(("hain", [Vec::new(), Vec::new(), Vec::new()]));
+
+    fn measure<F: Flatten>(
+        curves: &[CubicBezierSegment],
+        tolerance: f32,
+        rows: &mut [Vec<f32>; 3],
+    ) {
+        let errors = compute_cubic_curve_errors::<F>(curves, tolerance);
+        let (max, mean, median) = error_stats(&errors);
+        rows[0].push(max);
+        rows[1].push(mean);
+        rows[2].push(median);
+    }
 
     for tolerance in crate::TOLERANCES {
-        linear.push(compute_cubic_error::<crate::Linear>(&curves, tolerance));
-        levien.push(compute_cubic_error::<crate::Levien>(&curves, tolerance));
-        levien_simd.push(compute_cubic_error::<crate::LevienSimd>(&curves, tolerance));
-        levien_linear.push(compute_cubic_error::<crate::LevienLinear>(&curves, tolerance));
-        wang.push(compute_cubic_error::<crate::Wang>(&curves, tolerance));
-        wang_simd.push(compute_cubic_error::<crate::WangSimd4>(&curves, tolerance));
-        hain.push(compute_cubic_error::<crate::Hain>(&curves, tolerance));
+        measure::<crate::Linear>(&curves, tolerance, &mut results[0].1);
+        measure::<crate::Levien>(&curves, tolerance, &mut results[1].1);
+        measure::<crate::LevienSimd>(&curves, tolerance, &mut results[2].1);
+        measure::<crate::LevienLinear>(&curves, tolerance, &mut results[3].1);
+        measure::<crate::Wang>(&curves, tolerance, &mut results[4].1);
+        measure::<crate::WangSimd4>(&curves, tolerance, &mut results[5].1);
+        measure::<crate::Hain>(&curves, tolerance, &mut results[6].1);
     }
 
     let out_name = crate::testing::table::get_flatten_output();
@@ -138,13 +183,14 @@ fn cubic_error() {
         }
     };
 
-    print_first_row_md(output);
-    print_row_md(output, "linear     ", &linear);
-    print_row_md(output, "levien     ", &levien);
-    print_row_md(output, "levien-simd", &levien_simd);
-    print_row_md(output, "levien-linear", &levien_linear);
-    print_row_md(output, "wang", &wang);
-    print_row_md(output, "wang-simd", &wang_simd);
-    print_row_md(output, "hain", &hain);
+    let metric_names = ["max error", "mean error", "median error"];
+    for (metric, metric_name) in metric_names.iter().enumerate() {
+        let _ = writeln!(output, "{}", metric_name);
+        print_first_row_md(output);
+        for (name, rows) in &results {
+            print_row_md(output, *name, &rows[metric]);
+        }
+        let _ = writeln!(output);
+    }
 }
 
