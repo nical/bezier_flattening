@@ -6,6 +6,10 @@
 /// equation of a cubic bezier curve is insignificantly small. This can
 /// then be approximated by a quadratic equation for which the maximum
 /// difference from a linear approximation can be much more easily determined.
+///
+/// The step size below follows the paper's quadratic bound; the cases the
+/// premise does not cover are handled conservatively, and the quality caveats
+/// that follow from the premise are documented in notes/hain.md.
 use crate::{CubicBezierSegment, LineSegment};
 
 const EPSILON: f32 = 1e-4;
@@ -171,169 +175,82 @@ fn flatten_cubic_no_inflection<F: FnMut(&LineSegment)>(
     }
 }
 
+// Distance from the curve's inner control points to the chord, which bounds
+// the distance from the curve to the chord: the curve lies within the convex
+// hull of its control points, the chord's endpoints are two of the hull's
+// points, and the distance to a convex set is a convex function, so the curve
+// stays within tolerance of the chord whenever its inner control points do.
+fn chord_within_tolerance(bezier: &CubicBezierSegment, tolerance: f32) -> bool {
+    let v = bezier.to - bezier.from;
+    let vv = v.dot(v);
+    let mut max_dist = 0.0f32;
+    for p in [bezier.ctrl1, bezier.ctrl2] {
+        let u = if vv > 0.0 { (p - bezier.from).dot(v) / vv } else { 0.0 };
+        let proj = bezier.from + v * u.clamp(0.0, 1.0);
+        max_dist = max_dist.max((p - proj).length());
+    }
+    max_dist <= tolerance
+}
+
 fn no_inflection_flattening_step(bezier: &CubicBezierSegment, tolerance: f32) -> f32 {
     let v1 = bezier.ctrl1 - bezier.from;
     let v2 = bezier.ctrl2 - bezier.from;
-    let v3 = bezier.to - bezier.from;
 
-    let a = (v1.x * v1.x + v1.y * v1.y).sqrt();
-    if a == 0.0 {
-        // The curve starts with zero velocity: the frame used below is
-        // undefined. Only degenerate sub-curves end up here.
-        return 1.0;
-    }
+    // This function assumes that the bézier segment is not starting at an inflection point,
+    // otherwise the following cross product may result in very small numbers which will hit
+    // floating point precision issues.
 
-    // In the frame at the start of the curve (origin at bezier.from, x axis
-    // along v1), the curve is exactly
-    //     x(u) = 3 a u + (3 x2 - 6 a) u^2 + (3 a - 3 x2 + x3) u^3
-    //     s(u) = 3 y2 u^2 + (y3 - 3 y2) u^3
-    // with x2 = dot(v2, v1) / a and x3 = dot(v3, v1) / a the longitudinal
-    // components, and y2 = cross(v1, v2) / a and y3 = cross(v1, v3) / a the
-    // transverse ones.
+    // The paper transforms the curve into the frame of its start tangent and
+    // keeps only the quadratic transverse term, arguing that the cubic term is
+    // insignificantly small for a small enough step:
+    //     s(u) = s2 * u^2,     s2 = 3 * cross(v2, v1) / |v1|.
+    // The largest deviation of a quadratic from the chord over [0, t] is
+    // |s2| * t^2 / 4, reached at u = t/2, so the paper flattens the [0, t]
+    // portion of the curve as a straight line with t = 2 * sqrt(tolerance / |s2|).
     //
-    // The paper's step size is derived from the transverse part alone,
-    // assuming x(u) ~ 3 a u. That under-estimates the chord distance wherever
-    // x(u) departs from 3 a u: on curves whose start tangent is not aligned
-    // with the direction of travel (for example near a cusp) the true distance
-    // can be twice the approximation. Instead, use the exact distance from the
-    // curve point at u to the chord over [0, t]:
-    //     d(u) = u * (t - u) * |A + B * u| / |B(t)|
-    // with A = 3 a t (s2 + s3 t), B = s3 x(t) - q s(t),
-    //      s2 = 3 y2, s3 = y3 - 3 y2, p = 3 x2 - 6 a, q = 3 a - 3 x2 + x3,
-    //      x(t) = ((q t + p) t + 3 a) t and s(t) = (s2 + s3 t) t^2.
-    // This is exact: the numerator is a cubic in u that vanishes at u = 0 and
-    // u = t, so dividing it by u (t - u) leaves a linear function, and the
-    // maximum of u (t - u) |A + B u| over [0, t] is found by solving a
-    // quadratic (Rolle's theorem guarantees a critical point inside [0, t]).
-    //
-    // Take t where the maximum of d(u) over [0, t] meets the tolerance budget
-    // (0.9 * tolerance minus an f32 rounding allowance, see below), using the
-    // fixed-point iteration t <- t * (budget / d_max(t))^(1/3). The exponent
-    // matches the fastest growth of d_max (between quadratic and cubic in t),
-    // so the iteration converges from either side, and a final verification
-    // loop shrinks any step whose certified error still exceeds the budget.
-    let x2 = v2.dot(v1) / a;
-    let x3 = v3.dot(v1) / a;
-    let y2 = v1.cross(v2) / a;
-    let y3 = v1.cross(v3) / a;
-    let s2 = 3.0 * y2;
-    let s3 = y3 - 3.0 * y2;
-    if s2 == 0.0 && s3 == 0.0 {
-        // The remaining curve lies on its start tangent: its baseline chord
-        // is an exact approximation.
-        return 1.0;
-    }
-    let p = 3.0 * x2 - 6.0 * a;
-    let q = 3.0 * a - 3.0 * x2 + x3;
-
-    // Reserve part of the budget for the f32 rounding of the split itself:
-    // chord endpoints and sub-curve control points are rounded to f32, so the
-    // polyline deviates from the original curve by a couple of ulp of the
-    // coordinate magnitude even when the certified chord distance is zero.
-    let max_coord = bezier
-        .from
-        .x
-        .abs()
-        .max(bezier.from.y.abs())
-        .max(bezier.ctrl1.x.abs())
-        .max(bezier.ctrl1.y.abs())
-        .max(bezier.ctrl2.x.abs())
-        .max(bezier.ctrl2.y.abs())
-        .max(bezier.to.x.abs())
-        .max(bezier.to.y.abs());
-    let budget = (0.9 * tolerance - 2.0 * f32::EPSILON * max_coord).max(0.1 * tolerance);
-
-    // Maximum of d(u) over u in [0, t].
-    //
-    // Solving the critical-point equation directly,
-    //     u = (tB - A +/- sqrt(A^2 + A t B + t^2 B^2)) / (3B),
-    // loses the root near u = t/2 to cancellation whenever the cubic term is
-    // negligible (|B t| << |A|): both subtracted terms are ~|A| while their
-    // difference is ~tB/2, so f32 rounding can move the root anywhere in
-    // [0, t]. A root that lands near 0 or t makes the maximum look ~0 and the
-    // fixed point below then overshoots the safe step size by orders of
-    // magnitude. Instead substitute v = u/t and z = v - 1/2, which turns the
-    // critical points into the roots of
-    //     3 b z^2 + (2 A + b) z - b/4 = 0
-    // with A = 3 a t (s2 + s3 t) and b = t B. Their product is the constant
-    // -1/12: compute the well-conditioned root (numerator terms of the same
-    // sign) and obtain the other by Vieta, which needs no subtraction at all.
-    // Whatever rounding is left in b only slides the root along the flat top
-    // of the maximum, where |f| is insensitive to it first-order. The value at
-    // v = 1/2 (the exact maximizer when b = 0) is always included as a floor.
-    let d_max = |t: f32| -> f32 {
-        let w = s2 + s3 * t;
-        let xt = ((q * t + p) * t + 3.0 * a) * t;
-        let st = w * t * t;
-        let bt2 = xt * xt + st * st;
-        if bt2 == 0.0 {
-            // Degenerate chord: the curve comes back to its start point.
-            return f32::INFINITY;
-        }
-        let big_a = 3.0 * a * t * w;
-        let b = t * (s3 * xt - q * st);
-        let mut m: f32 = 0.25 * (big_a + 0.5 * b).abs();
-        if b != 0.0 {
-            let x = 2.0 * big_a + b;
-            let s = (x * x + 3.0 * b * b).sqrt();
-            let z1 = if x >= 0.0 { -(x + s) } else { s - x } / (6.0 * b);
-            let z2 = -1.0 / (12.0 * z1);
-            for v in [z1 + 0.5, z2 + 0.5] {
-                if v > 0.0 && v < 1.0 {
-                    m = m.max((v * (1.0 - v) * (big_a + b * v)).abs());
-                }
-            }
-        }
-        t * t * m / bt2.sqrt()
-    };
-
-    // Start from the single-term solutions of the paper's transverse bound
-    //     (|s2| / 4) t^2 + (|s3| / 2) t^3 = budget,
-    // clamped to 1. Both are >= the root of the combined bound, and the exact
-    // d_max differs from that bound only by the longitudinal correction, so
-    // the start is within a small factor of the target on either side.
-    let mut t = (4.0 * budget / s2.abs())
-        .sqrt()
-        .min((2.0 * budget / s3.abs()).cbrt())
-        .min(1.0);
-    let mut d = d_max(t);
-    for _ in 0..4 {
-        if t >= 0.995 && d <= budget {
+    // Everything the premise drops is a source of over-tolerant steps at the
+    // looser tolerances used here: the cubic transverse term, and the
+    // longitudinal motion that makes the chord deviate from the tangent line
+    // the transverse deviation is measured against. The paper targets much
+    // tighter tolerances (around 0.0005) where these are negligible; see
+    // notes/hain.md for the measured impact at 0.01 to 1.0.
+    let v2_cross_v1 = v2.cross(v1);
+    if v2_cross_v1 == 0.0 {
+        // The transverse deviation of ctrl2 rounds to zero: either the curve
+        // stays on its start tangent and the chord is an exact approximation,
+        // or the cross product of two nearly parallel (possibly long) vectors
+        // was rounded to zero for a curve that does deviate, which the
+        // quadratic model cannot see.
+        if chord_within_tolerance(bezier, tolerance) {
             return 1.0;
         }
-        let factor = if d > 0.0 && d.is_finite() {
-            (budget / d).cbrt()
-        } else {
-            // Degenerate chord: back off and let the caller make progress.
-            0.5
-        };
-        if (factor - 1.0).abs() < 0.02 {
-            break;
-        }
-        t *= factor;
-        d = d_max(t);
+        // The model is blind to this curve: take a conservative step to make
+        // progress. The sub-curves' own frames typically leave this degenerate
+        // configuration after a split or two.
+        return 0.5;
     }
-    // The fixed point assumes d_max grows at most like t^3 between
-    // evaluations, which a chord whose far end curls back toward the start
-    // can violate. Never return a step whose certified error exceeds the
-    // budget: shrink until it does (d_max vanishes like t^2, so this
-    // terminates; the floor of 0.5 avoids over-shrinking when d is barely
-    // over budget).
-    let mut guard = 0;
-    while d > budget && guard < 16 {
-        let factor = (budget / d).cbrt();
-        t *= if factor < 0.5 { 0.5 } else { factor };
-        d = d_max(t);
-        guard += 1;
-    }
+
+    // To remove divisions and check for divide-by-zero, this is optimized from:
+    // s2 = 3. * (v2.x * v1.y - v2.y * v1.x) / hypot(v1.x, v1.y);
+    // t = 2. * sqrt(tolerance / abs(s2));
+    let s2inv = (v1.x * v1.x + v1.y * v1.y).sqrt() / (3.0 * v2_cross_v1);
+    let t = 2.0 * f32::sqrt(tolerance * f32::abs(s2inv));
 
     // TODO: We start having floating point precision issues if this constant
     // is closer to 1.0 with a small enough tolerance threshold.
     if t >= 0.995 || t <= 0.0 {
-        return 1.0;
+        // The closed-form step claims the whole remaining curve is within
+        // tolerance. That claim inherits every blind spot of the quadratic
+        // model (the ignored cubic term, the longitudinal motion, and cross
+        // products of nearly parallel vectors rounding to zero), so verify it
+        // against the convex hull before emitting the whole curve as a line.
+        if chord_within_tolerance(bezier, tolerance) {
+            return 1.0;
+        }
+        return 0.5;
     }
 
-    return t;
+    t
 }
 
 // Find the inflection points of a cubic bezier curve.
