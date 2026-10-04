@@ -31,8 +31,8 @@ in the [benchmarks](readme.md) and [edge counts](edge_count.md).
 - [Yzerman](yzerman.md): approximates cubics with quadratics, each flattened
   with Wang's segment count.
   Implementations: `Yzerman`, `YzermanSimd4`.
-- [Hain](hain.md): flattens between inflection points using a quadratic
-  approximation of the curve.
+- [Hain](hain.md): flattens between inflection points, certifying the exact
+  maximum chord distance at each step.
   Implementations: `Hain`.
 - [Fixed splitting](fixed.md): tolerance-ignoring baselines.
   Implementations: `Fixed1`, `Fixed16`.

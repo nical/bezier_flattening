@@ -17,20 +17,36 @@ inflection parameters with a numerically stable quadratic root solver), after
 which the sub-curves between inflection ranges are flattened iteratively by
 extracting the longest flattenable prefix at each step.
 
-In the [edge counts](edge_count.md) (label `hain`) the algorithm produces the
-fewest segments of all algorithms at small tolerances (roughly 0.01 to 0.075 on
-the tiger dataset), but degrades at larger tolerances where it produces the
-most; its speed follows the same pattern in the [benchmarks](bench-cubic-threadripper.md).
-Cubic curves only.
+In the [edge counts](edge_count.md) (label `hain`) the segment counts sit within
+about 10% of the levien family at small tolerances and are the lowest of all
+algorithms at 0.5 and 1.0 on the full corpus. Unlike the levien variants, whose
+counts come with a certified error that exceeds the tolerance at several
+thresholds, hain's error stays within tolerance across the sweep. Cubic curves
+only.
+
+Certification is not free: computing the exact maximum chord distance takes a
+handful of square and cube roots per step where the paper's estimate needed a
+single polynomial evaluation, and hain is the slowest algorithm in every cubic
+[benchmark](bench-cubic-threadripper.md) table. At tolerance 0.2 it spends
+roughly 20 to 30 times the levien family's time per emitted segment on the
+chord-heavy datasets, where the paper's estimate cost 2.5 to 3.5 times; on
+datasets of short curves fixed per-curve costs dominate and the gap is much
+smaller.
 
 # Issues
 
-Unfortunately the paper does not expand on how small is "small enough" for the approximation to work. I spent quite a bit of time trying to get this algorithm to work, but could not get it to produce correct results at tolerance thresholds in the order of 0.25.
+The paper derives its step size from the transverse displacement alone,
+assuming the longitudinal position is `x(u) ~ 3u|v1|`, that the cubic term is
+negligible for a "small enough" step, and that the next split lands at `2 * t0`.
+That under-estimates the true chord distance wherever the start tangent does
+not point along the direction of travel (near cusps the true distance is up to
+twice the approximation), and the error grows with the tolerance as the
+"small enough" assumption weakens. With the paper's step size the flattening
+exceeded the tolerance at every threshold.
 
-The paper notes that testing was done with a flatness threshold of `0.0005`. Eyballing the results for small thresholds (for example `0.01`), it looks like the approximation indeed holds up so my current theory is that this algorithm works at low flatness thresholds (and is quite good at produce as few edges as possible under those parameters) but the approximation does not work for higher flatness thresholds.
-
-TODO: It should not be too difficult to work out the math and show incorrect error approximations with examples.
-
-# Workaround
-
-In order to be fair, the implementation in this repository applies a scaling factor to the flattening step which halves it at `tolerance = 0.25` and higher and gradually scales back to the paper's flattening step for tolerances `0.01` and below. This isn't a great solution.
+The implementation therefore no longer uses the paper's step size. At each step
+it computes the exact maximum distance from the curve to the candidate chord
+(the closed-form cubic `u (t - u) |A + B u| / |B(t)|`, maximized by solving a
+quadratic in the substitution `v = u/t`, `z = v - 1/2` for numerical stability)
+and takes the longest prefix whose certified distance meets the tolerance, with
+part of the budget reserved for the f32 rounding of the split itself.
