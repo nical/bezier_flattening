@@ -23,22 +23,65 @@ fn compute_error(curve: &CubicBezierSegment, approximation: &[Point]) -> (f32, f
             let mid = from.to_f64().lerp(to.to_f64(), 0.5);
             let mut min_dist: f32 = 100000000.0;
             for quad in &quads {
-                min_dist = min_dist.min(quad.distance_to_point(mid) as f32);
+                min_dist = min_dist.min(quad_distance_to_point(quad, mid) as f32);
             }
             max_error = max_error.max(min_dist);
             sum_error += min_dist;
             count += 1.0;
-
-            //if min_dist > 10.0 {
-            //    println!("Bad approximation {curve:?}, error = {min_dist:?}");
-            //}
         }
         prev = Some(*to);
     }
 
+    // The midpoint metric above is blind to a dropped tail: a polyline that
+    // stops short of the curve's end point still has well-placed segment
+    // midpoints. Charge the uncovered gap as error.
+    let tail_error = match approximation.last() {
+        Some(p) => (p.to_f64() - curve.to.to_f64()).length(),
+        None => (curve.from.to_f64() - curve.to.to_f64()).length(),
+    };
+    max_error = max_error.max(tail_error as f32);
+
     let avg = sum_error / count;
 
     (max_error, avg)
+}
+
+// Distance from a point to a quadratic bézier curve.
+//
+// QuadraticBezierSegment::distance_to_point finds the closest point by solving
+// the perpendicularity cubic with Cardano's formula, which loses precision when
+// the quad is nearly straight (the quadratic coefficient nearly cancels): the
+// root can come out far enough from the true one to inflate a near-zero
+// distance by orders of magnitude. Refine the root with Newton iterations on
+// (Q(t) - pos) · Q'(t) and keep whichever of the two roots is closer.
+fn quad_distance_to_point(
+    quad: &lyon_path::geom::QuadraticBezierSegment<f64>,
+    pos: lyon_path::geom::euclid::default::Point2D<f64>,
+) -> f64 {
+    let t0 = quad.closest_point(pos);
+    let d0 = (quad.sample(t0) - pos).length();
+
+    let v = quad.ctrl - quad.from;
+    let c = quad.from + quad.to.to_vector() - quad.ctrl * 2.0;
+    let mut t = t0;
+    for _ in 0..8 {
+        let p = quad.sample(t);
+        let dp = p - pos;
+        // Q'(t) = 2 * (v + t * c), Q''(t) = 2 * c
+        let qp = v + c * t;
+        let g = dp.dot(qp);
+        let gp = qp.dot(qp) * 2.0 + dp.dot(c) * 2.0;
+        if gp == 0.0 {
+            break;
+        }
+        let next = (t - g / gp).max(0.0).min(1.0);
+        if next == t {
+            break;
+        }
+        t = next;
+    }
+
+    d0.min((quad.sample(t) - pos).length())
 }
 
 fn compute_cubic_error<F: Flatten>(curves: &[CubicBezierSegment], tolerance: f32) -> f32 {
@@ -104,3 +147,4 @@ fn cubic_error() {
     print_row_md(output, "wang-simd", &wang_simd);
     print_row_md(output, "hain", &hain);
 }
+
