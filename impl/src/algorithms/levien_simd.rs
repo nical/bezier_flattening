@@ -344,7 +344,11 @@ pub unsafe fn flatten_cubic_simd4(curve: &CubicBezierSegment, tolerance: f32, cb
 
     let mut quads: ArrayVec<(FlatteningParams, QuadraticBezierPolynomial), 16> = ArrayVec::new();
 
-    let quad_step = fast_recip(num_quadratics as f32);
+    // `fast_recip` (raw rcp, ~2^-12 relative error) is not precise enough here:
+    // the last quad would end at t = num_quadratics * quad_step ~ 1 - 2e-4,
+    // leaving a slice of the curve near t=1 uncovered by any quad. The cost of
+    // an exact division is one scalar op per curve, which is negligible.
+    let quad_step = 1.0 / num_quadratics as f32;
     let num_quadratics = num_quadratics as u32;
     let mut quad_idx = 0;
     let mut from = curve.from;
@@ -436,7 +440,12 @@ pub unsafe fn flatten_cubic_simd4(curve: &CubicBezierSegment, tolerance: f32, cb
             scaled_count_sum += params.scaled_count;
         }
 
-        cb(&LineSegment { from, to: quads_last_to });
+        // On the last batch, `quads_last_to` is sampled at t = num_quadratics *
+        // quad_step, which is 1.0 only up to f32 rounding of the products, so it
+        // can fall short of the curve's endpoint. End the polyline at the exact
+        // endpoint instead, like `flatten_quadratic` above.
+        let to = if quad_idx >= num_quadratics { curve.to } else { quads_last_to };
+        cb(&LineSegment { from, to });
         if quad_idx >= num_quadratics {
             break;
         }
